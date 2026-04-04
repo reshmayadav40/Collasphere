@@ -1,0 +1,41 @@
+.main {
+
+    display: grid;
+    grid-template-columns: repeat(10, minmax(150px, 1fr));
+    gap: 20px;
+    /* padding: 10px; */
+}
+
+.main img {
+    width: 98%;
+    height: 80%;
+    object-fit: cover;
+    display: block;
+    border-radius: 8px;
+
+}
+
+#smal {
+    grid-column: span 2;
+    grid-row: span 1;
+
+    border: 3px solid rgb(136, 127, 127);
+}
+
+#smal,
+#large {
+    box-shadow: 4px 4px 15px rgb(12, 12, 12);
+
+}
+
+#large {
+    grid-column: span 3;
+    grid-row: span 2;
+
+    border: 3px solid rgb(132, 126, 126);
+}
+
+.main img:hover{
+    width: 99%;
+    height: 81%;
+}
