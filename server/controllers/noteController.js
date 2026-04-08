@@ -6,15 +6,18 @@ const checkProjectAccess = async (projectId, userId, checkWrite = false) => {
     const project = await Project.findById(projectId);
     if (!project) throw new Error('Project not found');
     
-    const isMember = project.members.includes(userId);
+    // Check if user is owner, member or pending member
+    const isOwner = project.owner.toString() === userId?.toString();
+    const isMember = project.members.some(m => m.toString() === userId?.toString());
+    const isPending = project.pendingMembers?.some(m => m.toString() === userId?.toString());
     
-    // If it's a write operation, must be member
-    if (checkWrite && !isMember) {
+    // If it's a write operation, must be owner or member
+    if (checkWrite && !isOwner && !isMember) {
         throw new Error('Not authorized to modify this project');
     }
 
-    // If it's a read operation, allow if member OR if project is public
-    if (!isMember && project.visibility !== 'public') {
+    // If it's a read operation, allow if owner, member, pending, or if project is public
+    if (!isOwner && !isMember && !isPending && project.visibility !== 'public') {
         throw new Error('Not authorized to access this project');
     }
     

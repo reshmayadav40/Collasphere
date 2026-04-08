@@ -186,9 +186,9 @@ const acceptInvite = async (req, res) => {
         }
 
         // Move from pendingMembers to members
-        project.pendingMembers = project.pendingMembers.filter(m => m.toString() !== userId);
-        if (!project.members.includes(userId)) {
-            project.members.push(userId);
+        project.pendingMembers.pull(req.user._id);
+        if (!project.members.includes(req.user._id)) {
+            project.members.push(req.user._id);
         }
         await project.save();
 

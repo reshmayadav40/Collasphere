@@ -36,6 +36,22 @@ function Navbar() {
     }
   };
 
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return localStorage.getItem("theme") === "dark";
+  });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.body.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.body.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }, [isDarkMode]);
+
+  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+
   const handleLogout = () => {
     logout();
     navigate("/login");
@@ -48,6 +64,14 @@ function Navbar() {
         CollabSphere
       </Link>
       <div className="navbar-links">
+        <button
+          onClick={toggleTheme}
+          className="btn btn-ghost btn-icon"
+          style={{ fontSize: "1.2rem", padding: "0.4rem" }}
+          title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+        >
+          {isDarkMode ? "☀️" : "🌙"}
+        </button>
         {user ? (
           <>
             <Link to="/dashboard" className="nav-link">
@@ -207,7 +231,20 @@ function Navbar() {
             <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
               👤 {user.name}
             </span>
-            <button onClick={handleLogout} className="btn btn-ghost btn-sm">
+            <button
+              onClick={handleLogout}
+              className="btn btn-ghost btn-sm"
+              onMouseEnter={e => {
+                e.currentTarget.style.background = '#ef4444';
+                e.currentTarget.style.color = '#fff';
+                e.currentTarget.style.borderColor = '#ef4444';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = '';
+                e.currentTarget.style.color = '';
+                e.currentTarget.style.borderColor = '';
+              }}
+            >
               Sign Out
             </button>
           </>

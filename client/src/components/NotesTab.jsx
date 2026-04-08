@@ -208,7 +208,7 @@ function NotesTab({ projectId }) {
                             <span>AI Insight</span>
                             <button onClick={() => setAiAnalysis('')} className="ml-auto text-gray-400 hover:text-gray-600 text-sm">Dismiss</button>
                         </h4>
-                        <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
+                        <div className="ai-output">
                             {aiAnalysis}
                         </div>
                     </div>

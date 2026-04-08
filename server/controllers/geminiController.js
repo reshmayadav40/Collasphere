@@ -6,7 +6,8 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // 🔥 MULTI MODEL LIST (fallback system)
 const MODELS = [
-  "gemini-2.5-flash",
+  "gemini-1.5-flash",
+  "gemini-1.5-pro",
 ];
 // Helper function (tries multiple models)
 const generateWithFallback = async (prompt) => {

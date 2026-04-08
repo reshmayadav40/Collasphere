@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 
+const BASE_URL = 'https://collasphere.onrender.com';
+
 function FilesTab({ projectId }) {
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -55,10 +57,26 @@ function FilesTab({ projectId }) {
     
     try {
         // Fetch the file content
-        const fileRes = await fetch(`http://localhost:5000/${file.path}`);
-        if (!fileRes.ok) throw new Error("Could not fetch file content");
+        const fileRes = await fetch(`${BASE_URL}/${file.path}`);
+        let content;
         
-        const content = await fileRes.text();
+        if (fileRes.status === 404) {
+            console.log("File not on live server, trying local fallback...");
+            try {
+                const localRes = await fetch(`http://localhost:5000/${file.path}`);
+                if (localRes.ok) {
+                    content = await localRes.text();
+                } else {
+                    throw new Error("File not found on server (it may have been cleared during a restart). Try re-uploading!");
+                }
+            } catch (err) {
+                throw new Error("File not found on server (it may have been cleared during a restart). Try re-uploading!");
+            }
+        } else if (!fileRes.ok) {
+            throw new Error("Could not fetch file content");
+        } else {
+            content = await fileRes.text();
+        }
         
         // Ensure it's not a huge binary file that's interpreted as text
         if (content.length > 50000) {
@@ -118,7 +136,7 @@ function FilesTab({ projectId }) {
                 <span className="mr-2">✨</span> Gemini Code Explanation
                 <button onClick={() => setAiAnalysis('')} className="ml-auto text-gray-400 hover:text-gray-600 text-sm font-normal">Dismiss</button>
             </h4>
-            <div className="prose prose-sm max-w-none text-gray-800 whitespace-pre-wrap font-mono text-sm leading-relaxed p-4 bg-gray-50 rounded">
+            <div className="ai-output">
                 {aiAnalysis}
             </div>
         </div>
@@ -147,7 +165,7 @@ function FilesTab({ projectId }) {
                 </div>
                 <div className="flex items-center space-x-3">
                   <a
-                    href={`http://localhost:5000/${file.path}`}
+                    href={`${BASE_URL}/${file.path}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"

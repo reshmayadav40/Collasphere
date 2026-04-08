@@ -22,10 +22,10 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="min-h-screen bg-gray-50 font-sans">
+        <div className="app-container">
           <Navbar />
 
-          <main>
+          <main className="main-content">
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" />} />
 

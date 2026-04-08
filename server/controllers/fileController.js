@@ -8,13 +8,16 @@ const checkProjectAccess = async (projectId, userId, checkWrite = false) => {
     const project = await Project.findById(projectId);
     if (!project) throw new Error('Project not found');
     
+    // Check if user is owner, member or pending member
+    const isOwner = project.owner.toString() === userId?.toString();
     const isMember = project.members.some(m => m.toString() === userId?.toString());
+    const isPending = project.pendingMembers?.some(m => m.toString() === userId?.toString());
     
-    if (checkWrite && !isMember) {
-        throw new Error('Not authorized to upload to this project');
+    if (checkWrite && !isOwner && !isMember) {
+        throw new Error('Not authorized to upload/modify this project');
     }
 
-    if (!isMember && project.visibility !== 'public') {
+    if (!isOwner && !isMember && !isPending && project.visibility !== 'public') {
         throw new Error('Not authorized to access this project');
     }
     
@@ -24,7 +27,13 @@ const checkProjectAccess = async (projectId, userId, checkWrite = false) => {
 // Configure Multer storage
 const storage = multer.diskStorage({
   destination(req, file, cb) {
-    cb(null, 'uploads/');
+    const uploadPath = path.resolve(__dirname, '..', 'uploads');
+    // Ensure dir exists (redundant with server.js but safe)
+    const fs = require('fs');
+    if (!fs.existsSync(uploadPath)) {
+        fs.mkdirSync(uploadPath, { recursive: true });
+    }
+    cb(null, uploadPath);
   },
   filename(req, file, cb) {
     cb(
@@ -60,10 +69,11 @@ const uploadFile = async (req, res) => {
         }
 
         try {
+            const savedPath = `uploads/${req.file.filename}`;
             const newFile = new FileModel({
                 filename: req.file.filename,
                 originalname: req.file.originalname,
-                path: req.file.path,
+                path: savedPath,
                 mimetype: req.file.mimetype,
                 size: req.file.size,
                 uploader: req.user._id,
@@ -142,9 +152,10 @@ const updateFile = async (req, res) => {
                 }
 
                 // Update file record
+                const savedPath = `uploads/${req.file.filename}`;
                 file.filename = req.file.filename;
                 file.originalname = req.file.originalname;
-                file.path = req.file.path;
+                file.path = savedPath;
                 file.mimetype = req.file.mimetype;
                 file.size = req.file.size;
                 file.updatedBy = req.user._id;
@@ -182,48 +193,30 @@ const downloadProjectZip = async (req, res) => {
         // Find files for this project. 
         // We filter for isProjectFile: true to avoid including student uploads/submissions 
         // as requested by the user, and handle potential branch mismatch.
+        // Find files and notes for this project using a flexible ID query
+        const queryId = mongoose.Types.ObjectId.isValid(projectId) ? new mongoose.Types.ObjectId(projectId) : projectId;
         const files = await FileModel.find({ 
-            project: mongoose.Types.ObjectId.isValid(projectId) ? new mongoose.Types.ObjectId(projectId) : projectId,
-            $and: [
-              {
-                $or: [
-                    { branch: branch },
-                    { branch: { $exists: false } },
-                    { branch: "" },
-                    { branch: null }
-                ]
-              },
-              {
-                $or: [
-                    { isProjectFile: true },
-                    { isProjectFile: { $exists: false } }
-                ]
-              }
-            ]
+            $or: [{ project: queryId }, { project: projectId.toString() }]
         });
         
         const NoteModel = require('../models/Note');
         const notes = await NoteModel.find({ 
-            project: mongoose.Types.ObjectId.isValid(projectId) ? new mongoose.Types.ObjectId(projectId) : projectId
+            $or: [{ project: queryId }, { project: projectId.toString() }]
         });
 
-        console.log(`Download Debug: Project ${projectId}, Branch ${branch}`);
-        console.log(`Files found matching criteria: ${files.length}, Notes found: ${notes.length}`);
+        console.log(`Download Debug: Project ${projectId}, Files: ${files.length}, Notes: ${notes.length}`);
 
-        if (files.length === 0 && notes.length === 0) {
-            // Fallback: If no 'isProjectFile' exists but we have some files, 
-            // and the user is complaining it's empty, maybe we should include them?
-            // Actually, the user specifically said NOT to bring code from student uploads.
-            // But if there's ONLY student uploads and no project files, we get nothing.
-            // For now, let's stick to the rule.
-            return res.status(400).json({ message: 'Nothing to download' });
-        }
-
-        res.attachment(`${project.name.replace(/[^a-zA-Z0-9]/g, '_')}.zip`);
+        // Set attachment header
+        res.attachment(`${project.name.replace(/[^a-zA-Z0-9]/g, '_') || 'project'}.zip`);
 
         const archive = archiver('zip', { zlib: { level: 9 } });
         archive.on('error', (err) => { console.error('Archiver Error:', err); });
         archive.pipe(res);
+
+        // If both are empty, add a placeholder so the ZIP isn't corrupted/empty
+        if (files.length === 0 && notes.length === 0) {
+            archive.append('# Project Overview\n\nNo files or notes have been added to this project yet.', { name: 'PROJECT_INFO.md' });
+        }
 
         // Bundle notes as MD files
         let readmeFound = false;
@@ -305,10 +298,12 @@ const pushFiles = async (req, res) => {
             const destinationPath = `uploads/file-${Date.now()}-${path.basename(fPath)}`;
             await fs.move(fPath, path.join(process.cwd(), destinationPath));
 
+            const savedPath = `uploads/${path.basename(destinationPath)}`;
+            
             const newFile = new FileModel({
                 filename: path.basename(destinationPath),
                 originalname: originalName, // Store the path relative to zip root
-                path: destinationPath,
+                path: savedPath,
                 uploader: req.user._id,
                 project: projectId,
                 branch: branch,

@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 
+const BASE_URL = 'https://collasphere.onrender.com';
+
 // ─── Helper ──────────────────────────────────────────────────────────
 function getFileIcon(mimetype = '', name = '') {
   const ext = name.split('.').pop()?.toLowerCase();
@@ -277,7 +279,7 @@ function FilesTab({ projectId, onViewFile, files, setFiles, loading, isPending }
       <div className="section-header">
         <span className="section-title">📁 Files ({files.length})</span>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-           <button className="btn btn-secondary btn-sm" onClick={() => window.open(`http://localhost:5000/api/files/download/project/${projectId}`)}>
+           <button className="btn btn-secondary btn-sm" onClick={() => window.open(`${BASE_URL}/api/files/download/project/${projectId}`)}>
              📦 Download ZIP
            </button>
            {!isPending && (
@@ -787,10 +789,15 @@ function ProjectView() {
 
   useEffect(() => {
     api.get(`/projects/${id}`)
-      .then(r => setProject(r.data))
+      .then(r => {
+        setProject(r.data);
+        const userId = user?._id || user?.id; // Handle both id formats
+        const pending = r.data.pendingMembers?.some(m => (m._id || m) === userId);
+        setIsPending(!!pending);
+      })
       .catch(() => navigate('/dashboard'))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, user]);
 
   const isOwner = project?.owner?._id === user?._id || project?.owner === user?._id;
 
@@ -834,7 +841,8 @@ function ProjectView() {
     
     if (!isText) {
       // For non-text files, just open in new tab (images, pdfs, etc)
-      window.open(`http://localhost:5000/uploads/${file.filename}`, '_blank');
+      const openUrl = file.path ? `${BASE_URL}/${file.path}` : `${BASE_URL}/uploads/${file.filename}`;
+      window.open(openUrl, '_blank');
       return;
     }
 
@@ -843,7 +851,22 @@ function ProjectView() {
     setContentLoading(true);
 
     try {
-      const res = await fetch(`http://localhost:5000/uploads/${file.filename}`);
+      const fetchUrl = file.path ? `${BASE_URL}/${file.path}` : `${BASE_URL}/uploads/${file.filename}`;
+      let res = await fetch(fetchUrl);
+      
+      // If live server 404s, automatically try fallback to local server
+      if (res.status === 404) {
+        console.log("File not on live server, trying local fallback...");
+        const localUrl = file.path ? `http://localhost:5000/${file.path}` : `http://localhost:5000/uploads/${file.filename}`;
+        try {
+          const localRes = await fetch(localUrl);
+          if (localRes.ok) res = localRes;
+        } catch (localErr) {
+          console.warn("Local fallback failed as well.");
+        }
+      }
+
+      if (res.status === 404) throw new Error('File not found on server (it may have been cleared during a restart). Try re-uploading!');
       if (!res.ok) throw new Error('Could not fetch file content');
       const text = await res.text();
       setFileContent(text);
@@ -864,7 +887,7 @@ function ProjectView() {
     if (!fileContent || !viewingFile || !viewingFile.originalname.endsWith('.html')) return '';
 
     let processed = fileContent;
-    const serverBaseUrl = 'http://localhost:5000/uploads';
+    const serverBaseUrl = `${BASE_URL}/uploads`;
 
     // Helper to find file by original name in the same branch/project
     const findFile = (name) => {
@@ -941,7 +964,7 @@ function ProjectView() {
                     const token = userStr ? JSON.parse(userStr).token : '';
                     // Sanitize name for terminal compatibility (remove all special characters)
                     const projectName = project.name.replace(/[^a-zA-Z0-9]/g, '_');
-                    const cmd = `curl -L -H "Authorization: Bearer ${token}" http://localhost:5000/api/download/project/${project._id} -o ${projectName}.zip && unzip ${projectName}.zip -d ${projectName} && rm ${projectName}.zip`;
+                    const cmd = `curl -L -H "Authorization: Bearer ${token}" https://collasphere.onrender.com/api/files/download/project/${project._id} -o ${projectName}.zip && unzip ${projectName}.zip -d ${projectName} && rm ${projectName}.zip && cd ${projectName} && code .`;
                     navigator.clipboard.writeText(cmd);
                     alert('🚀 Proper Clone Command Copied!\n\nThis command uses your secure session token to download your private files and unzip them into a project folder.\n\n⚠️ DO NOT share this command with others.');
                   }}
@@ -1088,7 +1111,7 @@ function ProjectView() {
                    📋 Copy
                  </button>
                  <a 
-                  href={`http://localhost:5000/uploads/${viewingFile.filename}`} 
+                  href={`${BASE_URL}/uploads/${viewingFile.filename}`} 
                   download={viewingFile.originalname}
                   className="btn btn-primary btn-sm"
                   style={{ padding: '4px 8px', fontSize: '0.7rem' }}
